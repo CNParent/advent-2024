@@ -71,17 +71,4 @@ internal class Day22 : Day
         secret %= _pruneValue;
         return secret;
     }
-
-    private class PurchaseStrategy
-    {
-        public int[] Sequence { get; }
-
-        public long TotalBananas { get; }
-    }
-
-
-    private class Buyer
-    {
-        public Dictionary<string, int> Prices { get; }
-    }
 }
