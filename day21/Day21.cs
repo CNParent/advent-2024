@@ -5,133 +5,171 @@ internal class Day21 : Day
 
     private static Device _controller = new(File.ReadAllText("C:\\git\\advent-2024\\day21\\controller.txt"));
 
-    protected override string InputPath => "/day21/small.txt";
+    private static Dictionary<string, string[]>? _instructions;
+
+    private static Dictionary<string, string[]> Instructions => _instructions ??= [];
+
+    private static Dictionary<string, long> Evaluated { get; } = [];
+
+    protected override string InputPath => "/day21/input.txt";
 
     internal override string A()
     {
-        Robot[] robots = [
-            new (_keypad),
-            new (_controller),
-            new (_controller)
-        ];
-
-        List<IEnumerable<char>> instructions = [];
-        var sequences = Input.Split("\r\n").Select(x => x.ToCharArray());
-        foreach(var sequence in sequences)
-        {
-            IEnumerable<char> inputs = sequence;
-            foreach (var robot in robots)
-            {
-                var result = robot.Device.GetInputSequence(inputs, robot.Position);
-                robot.Position = inputs.Last();
-                inputs = result.SelectMany(x => x);
-            }
-
-            instructions.Add(inputs);
-            Console.WriteLine();
-        }
-
-        var complexity = 0;
-        for(var i = 0; i < instructions.Count; i++)
-        {
-            var instruction = instructions[i];
-            var sequence = sequences.ElementAt(i);
-            var numeric = int.Parse(string.Join("", sequence).TrimEnd('A'));
-            complexity += numeric * instruction.Count();
-
-            Console.WriteLine($"{string.Join("", sequence)}: {string.Join("", instruction)}");
-        }
-
-        return $"Total complexity of all instructions is {complexity}";
+        _controller.EnsureControlsAreMapped();
+        _keypad.EnsureControlsAreMapped();
+        return $"Total complexity of all instructions is {CalculateComplexity(3)}";
     }
 
     internal override string B()
     {
-        throw new NotImplementedException();
+        _controller.EnsureControlsAreMapped();
+        _keypad.EnsureControlsAreMapped();
+        return $"Total complexity of all instructions is {CalculateComplexity(26)}";
     }
 
-    private class Robot
+    internal long CalculateComplexity(int nRobots)
     {
-        public Device Device { get; }
-
-        public char Position { get; set; } = 'A';
-
-        public Robot(Device device)
+        long complexity = 0;
+        var sequences = Input.Split("\r\n");
+        foreach(var s in sequences)
         {
-            Device = device;
+            var sequence = $"A{s}";
+            var totalLength = GetSequenceLength(sequence, nRobots);
+            var keypadValue = int.Parse(s.TrimEnd('A'));
+            complexity += totalLength * keypadValue;
         }
+
+        return complexity;
+    }
+    
+    private long GetSequenceLength(IEnumerable<char> sequence, int iterationsRemaining)
+    {
+        if (iterationsRemaining == 0) return sequence.Count() - 1;
+
+        var evalKey = $"{sequence}|{iterationsRemaining}";
+        if (Evaluated.ContainsKey(evalKey)) return Evaluated[evalKey];
+        else Evaluated.Add(evalKey, 0);
+
+        long sum = 0;
+        var prev = sequence.First();
+        foreach(var next in sequence.Skip(1))
+        {
+            var instruction = Instructions[$"{prev}{next}"];
+            var lengths = instruction.Select(o => GetSequenceLength($"A{o}", iterationsRemaining - 1));
+            sum += lengths.Min();
+            prev = next;
+        }
+
+        Evaluated[evalKey] = sum;
+        return sum;
+    }
+
+    private static long GetEntropy(string value)
+    {
+        var entropy = 0;
+        for (var i = 1; i < value.Length; i++)
+        {
+            entropy += _controller.GetDistance(value[i], value[i-1]);
+        }
+
+        return entropy;
     }
 
     private class Device
     {
         public Dictionary<char, int[]> Controls { get; } = [];
 
-        public Dictionary<string, string> Instructions { get; } = [];
+        public char[][] Grid { get; }
 
         public Device(string input)
         {
-            var values = input
+            Grid = input
                 .Split("\r\n")
                 .Select(x => x.ToCharArray())
                 .ToArray();
 
-            for(var j = 0; j < values.Length; j++)
+            for(var j = 0; j < Grid.Length; j++)
             {
-                for(var i = 0; i < values[j].Length; i++)
+                for(var i = 0; i < Grid[j].Length; i++)
                 {
-                    var c = values[j][i];
+                    var c = Grid[j][i];
                     Controls.Add(c, [i,j]);
                 }
             }
+        }
+
+        public void EnsureControlsAreMapped()
+        {
+            if (Controls.Count == 0) return;
 
             foreach(var a in Controls)
             {
                 foreach(var b in Controls)
                 {
-                    Instructions.Add($"{a.Key}{b.Key}", string.Join("", GetInputSequence(b.Key,a.Key)));
+                    var key = $"{a.Key}{b.Key}";
+                    if (Instructions.ContainsKey(key) || a.Key == ' ' || b.Key == ' ') continue;
+
+                    var results = MoveTowards(a.Value, b.Value, "").Select(r => new { Entropy = GetEntropy(r), Value = r }).ToArray();
+                    var minEntropy = results.Min(r => r.Entropy);
+                    var filtered = results.Where(r => r.Entropy == minEntropy).Select(r => r.Value).ToArray();
+                    Instructions.Add(key, filtered);
                 }
             }
         }
 
-        public IEnumerable<IEnumerable<char>> GetInputSequence(IEnumerable<char> input, char start)
+        public int GetDistance(char from, char to)
         {
-            ////Console.WriteLine($"Calculating input sequence for {string.Join("", input)} starting from {start}");
-            input = [start, ..input];
-            for (var i = 1; i < input.Count(); i++)
-            {
-                yield return GetInputSequence(input.ElementAt(i), input.ElementAt(i - 1));
-            }
+            var fromP = Controls[from];
+            var toP = Controls[to];
+            return Math.Abs(fromP[0] - toP[0]) + Math.Abs(fromP[1] - toP[1]);
         }
 
-        public IEnumerable<char> GetInputSequence(char target, char start)
+        private IEnumerable<string> MoveTowards(int[] from, int[] to, string path)
         {
-            ////Console.WriteLine($"Calculating input sequence {start} -> {target}");
-            var pStart = Controls[start];
-            var pTarget = Controls[target];
-            var horizontal = pTarget[0] - pStart[0];
-            var vertical = pTarget[1] - pStart[1];
-            while (horizontal < 0)
+            if (from[0] == to[0] && from[1] == to[1])
             {
-                yield return '<';
-                horizontal++;
-            }
-            while (horizontal > 0)
-            {
-                yield return '>';
-                horizontal--;
-            }
-            while (vertical < 0)
-            {
-                yield return '^';
-                vertical++;
-            }
-            while (vertical > 0)
-            {
-                yield return 'v';
-                vertical--;
+                yield return $"{path}A";
+                yield break;
             }
 
-            yield return 'A';
+            var current = Grid[from[1]][from[0]];
+            if (current == ' ') yield break;
+
+            if (from[0] < to[0])
+            {
+                var options = MoveTowards([from[0] + 1, from[1]], to, $"{path}>");
+                foreach(var option in options)
+                {
+                    yield return option;
+                }
+            }
+
+            if (from[0] > to[0])
+            {
+                var options = MoveTowards([from[0] - 1, from[1]], to, $"{path}<");
+                foreach(var option in options)
+                {
+                    yield return option;
+                }
+            }
+
+            if (from[1] < to[1])
+            {
+                var options = MoveTowards([from[0], from[1] + 1], to, $"{path}v");
+                foreach(var option in options)
+                {
+                    yield return option;
+                }
+            }
+
+            if (from[1] > to[1])
+            {
+                var options = MoveTowards([from[0], from[1] - 1], to, $"{path}^");
+                foreach(var option in options)
+                {
+                    yield return option;
+                }
+            }
         }
     }
 }
