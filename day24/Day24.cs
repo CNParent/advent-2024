@@ -13,53 +13,8 @@ internal class Day24 : Day
     }
 
     internal override string B()
-    {        
-        var sections = Input.Split("\r\n\r\n");
-        var states = sections[0].Split("\r\n").Select(x => x.Split(": ")).ToDictionary(x => x[0], x => x[1] == "1") ?? 
-            throw new Exception("Could not create initial state map");
-        
-        var instructions = sections[1].Split("\r\n").Select(x => new Instruction(x)).ToArray();
-
-        Process(states, [.. instructions]);
-        Console.WriteLine(string.Join("\r\n", states.Select(s => $"{s.Key}: {(s.Value ? 1 : 0)}")));
-        var x = GetCircuitValue('x', states);
-        var y = GetCircuitValue('y', states);
-        var expected = x + y;
-        var expectedb = Convert.ToString(expected, 2);
-        var actual = GetCircuitValue('x', states);
-        var error = expected ^ actual;        
-        var errorb = Convert.ToString(error, 2);
-        Console.WriteLine($"Error {errorb}b");
-        var zerrors = errorb
-            .ToCharArray()
-            .Reverse()
-            .Select((x,i) => new { Key = $"z{i:D2}", Value = x == '1' })
-            .Where(x => x.Value && states.ContainsKey(x.Key))
-            .Select(x => x.Key)
-            .ToList();
-
-        var zgoods = states.Where(x => x.Key.StartsWith('z') && !zerrors.Contains(x.Key)).Select(x => x.Key).ToList();
-        var bads = GetAncestors(instructions, [..zerrors]);
-        Console.WriteLine("\r\n>>>>>>>>>>>>>>>>>>>>>>>> BADS >>>>>>>>>>>>>>>>>>>>>>>>>>>>>");
-        Console.WriteLine(string.Join("\r\n", bads.Select(c => c.Text).Order()));
-        Console.WriteLine("\r\n>>>>>>>>>>>>>>>>>>>>>>>> GOODS >>>>>>>>>>>>>>>>>>>>>>>>>>>>");
-        var goods = GetAncestors(instructions, [..zgoods]);
-        Console.WriteLine(string.Join("\r\n", goods.Select(c => c.Text).Order()));
-        Console.WriteLine("\r\n>>>>>>>>>>>>>>>>>>>>>>>> SWAPPABLE >>>>>>>>>>>>>>>>>>>>>>>>");
-        var goodResults = goods.Select(g => g.Result);
-        var goodArguments = goods.SelectMany(g => g.Arguments);
-        var swappables = bads.Where(b => !goods.Contains(b) && !goodArguments.Contains(b.Result)).ToArray();
-        Console.WriteLine(string.Join("\r\n", swappables.Select(c => c.Text).Order()));
-
-        var swaptions = new Dictionary<Instruction, Instruction[]>();
-        foreach(var swappable in swappables)
-        {
-            var descendants = swappables.Where(x => !GetDescendants(instructions, x).Contains(swappable));
-            Console.WriteLine($"{swappable.Text} can be swapped with {descendants.Count()} options");
-        }
-
-
-        return "Not done yet";
+    {
+        return "Just draw a big picture :)";
     }
 
     private static long GetCircuitValue(char series, Dictionary<string, bool> states)
@@ -101,10 +56,10 @@ internal class Day24 : Day
     private static IEnumerable<Instruction> GetAncestors(Instruction[] instructions, string key) => 
         instructions.Where(i => i.Result == key);
 
-    private static IEnumerable<Instruction> GetDescendants(Instruction[] instructions, Instruction instruction)
+    private static IEnumerable<Instruction> GetDescendants(Instruction[] instructions, string key)
     {
         var results = new HashSet<Instruction>();
-        List<Instruction> remaining = [instruction];
+        List<Instruction> remaining = [..instructions.Where(x => x.Arguments.Contains(key))];
         while(remaining.Count != 0)
         {
             var next = remaining.First();
